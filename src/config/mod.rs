@@ -14,7 +14,7 @@ mod utils;
 use base64;
 use failure::ResultExt;
 use crate::{Error, ErrorKind, Result};
-use reqwest::{header, Certificate, Client, Identity};
+use reqwest::{header, Client};
 
 use self::kube_config::KubeConfigLoader;
 
@@ -88,9 +88,7 @@ pub fn load_kube_config_with(options: ConfigOptions) -> Result<Configuration> {
     let mut client_builder = Client::builder();
 
     if let Some(bundle) = loader.ca_bundle() {
-        for ca in bundle? {
-            let cert = Certificate::from_der(&ca.to_der().context(ErrorKind::SslError)?)
-                .context(ErrorKind::SslError)?;
+        for cert in bundle? {
             client_builder = client_builder.add_root_certificate(cert);
         }
     }
@@ -158,9 +156,7 @@ pub fn incluster_config() -> Result<Configuration> {
             incluster_config::SERVICE_PORTENV
     ))))?;
 
-    let ca = incluster_config::load_cert().context(ErrorKind::SslError)?;
-    let req_ca = Certificate::from_der(&ca.to_der().context(ErrorKind::SslError)?)
-        .context(ErrorKind::SslError)?;
+    let req_ca = incluster_config::load_cert().context(ErrorKind::SslError)?;
 
     let token = incluster_config::load_token()
         .context(ErrorKind::KubeConfig("Unable to load in cluster token".to_string()))?;

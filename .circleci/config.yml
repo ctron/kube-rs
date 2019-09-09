@@ -22,6 +22,7 @@ jobs:
           keys:
           - cache-{{ checksum "deps_checksum" }}
       - run: cargo build
+      - run: cargo build --features rustls-tls
       - run: cargo test --lib
       - run: cargo test --example crd_api crd_reflector
       - run: cargo test --all-features -j4

@@ -1,13 +1,19 @@
 use std::path::Path;
+#[cfg(not(feature="rustls-tls"))]
 use openssl::{
     pkcs12::Pkcs12,
     pkey::PKey,
     x509::X509,
 };
+#[cfg(not(feature="rustls-tls"))]
 use failure::ResultExt;
 use crate::{Result, Error, ErrorKind};
 use crate::config::apis::{AuthInfo, Cluster, Config, Context};
+#[cfg(not(feature="rustls-tls"))]
 use reqwest::Identity;
+use reqwest::Certificate;
+#[cfg(feature="rustls-tls")]
+use rustls::internal::msgs::codec::Codec;
 
 /// KubeConfigLoader loads current context, cluster, and authentication information.
 #[derive(Debug)]
@@ -85,8 +91,35 @@ impl KubeConfigLoader {
         reqwest::Identity::from_pem(buffer.as_slice()).map_err(|_|Error::from(ErrorKind::SslError))
     }
 
-    pub fn ca_bundle(&self) -> Option<Result<Vec<X509>>> {
+    #[cfg(not(feature="rustls-tls"))]
+    pub fn ca_bundle(&self) -> Option<Result<Vec<Certificate>>> {
         let bundle = self.cluster.load_certificate_authority().ok()?;
-        Some(X509::stack_from_pem(&bundle).map_err(|_| Error::from(ErrorKind::SslError)))
+
+        let bundle = X509::stack_from_pem(&bundle).map_err(|_| Error::from(ErrorKind::SslError)).ok()?;
+
+        let mut certs = Vec::new();
+
+        for cert in bundle {
+            certs.push(Certificate::from_der(&cert.to_der().context(ErrorKind::SslError).ok()?)
+                .context(ErrorKind::SslError).ok()?)
+        }
+
+        Some(Ok(certs))
+    }
+
+    #[cfg(feature="rustls-tls")]
+    pub fn ca_bundle(&self) -> Option<Result<Vec<Certificate>>> {
+        let bundle = self.cluster.load_certificate_authority().ok()?;
+
+        let mut c = std::io::Cursor::new(bundle);
+        let bundle = rustls::internal::pemfile::certs(&mut c).ok()?;
+
+        let mut certs = Vec::new();
+
+        for cert in bundle {
+            certs.push(reqwest::Certificate::from_der(cert.get_encoding().as_slice()).ok()?);
+        }
+
+        Some(Ok(certs))
     }
 }

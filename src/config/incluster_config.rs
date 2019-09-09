@@ -1,7 +1,9 @@
 use std::env;
 
 use failure::Error;
+#[cfg(not(feature="rustls-tls"))]
 use openssl::x509::X509;
+use reqwest::Certificate;
 
 use crate::config::utils;
 
@@ -30,9 +32,19 @@ pub fn load_token() -> Result<String, Error> {
 }
 
 /// Returns certification from specified path in cluster.
-pub fn load_cert() -> Result<X509, Error> {
+#[cfg(not(feature="rustls-tls"))]
+pub fn load_cert() -> Result<Certificate, Error> {
     let ca = utils::data_or_file_with_base64(&None, &Some(SERVICE_CERTFILE.to_string()))?;
-    X509::from_pem(&ca).map_err(Error::from)
+    let ca = X509::from_pem(&ca).map_err(Error::from)?;
+
+    Ok(Certificate::from_der(&ca.to_der()?)?)
+}
+
+#[cfg(feature="rustls-tls")]
+pub fn load_cert() -> Result<Certificate, Error> {
+    let ca = utils::data_or_file_with_base64(&None, &Some(SERVICE_CERTFILE.to_string()))?;
+
+    Ok(reqwest::Certificate::from_pem(ca.as_slice())?)
 }
 
 #[test]
