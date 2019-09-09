@@ -94,18 +94,17 @@ pub fn load_kube_config_with(options: ConfigOptions) -> Result<Configuration> {
             client_builder = client_builder.add_root_certificate(cert);
         }
     }
-    match loader.p12(" ") {
-        Ok(p12) => {
-            let req_p12 = Identity::from_pkcs12_der(&p12.to_der().context(ErrorKind::SslError)?, " ")
-                .context(ErrorKind::SslError)?;
-            client_builder = client_builder.identity(req_p12);
-        }
+
+    match loader.identity() {
+        Ok(id) => {
+            client_builder = client_builder.identity(id);
+        },
         Err(_) => {
             // last resort only if configs ask for it, and no client certs
             if let Some(true) = loader.cluster.insecure_skip_tls_verify {
                 client_builder = client_builder.danger_accept_invalid_certs(true);
             }
-        }
+        },
     }
 
     let mut headers = header::HeaderMap::new();
